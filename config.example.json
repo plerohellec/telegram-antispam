@@ -4,6 +4,7 @@
   "session": "antispam",
   "flags_file": "flags.jsonl",
   "profiles_file": "sender_profiles.json",
+  "log_file": null,
   "include_groups": false,
   "contact_refresh_seconds": 300,
   "max_links": 3,

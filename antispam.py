@@ -21,6 +21,7 @@ DEFAULTS = {
     "session": "antispam",
     "flags_file": "flags.jsonl",
     "profiles_file": "sender_profiles.json",
+    "log_file": None,
     "include_groups": False,
     "contact_refresh_seconds": 300,
     "max_links": 3,
@@ -54,9 +55,23 @@ def load_config(path):
     for key in ("session", "flags_file", "profiles_file"):
         if not isinstance(config[key], str) or not config[key].strip():
             raise ValueError(f"{key} must be a nonempty path")
+    if config["log_file"] is not None and (
+        not isinstance(config["log_file"], str) or not config["log_file"].strip()
+    ):
+        raise ValueError("log_file must be null or a nonempty path")
     if Path(config["profiles_file"]).resolve() == Path(config["flags_file"]).resolve():
         raise ValueError("profiles_file and flags_file must be different paths")
     return config
+
+
+def configure_logging(config):
+    options = {
+        "level": logging.INFO,
+        "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
+    }
+    if config["log_file"] is not None:
+        options.update(filename=config["log_file"], encoding="utf-8")
+    logging.basicConfig(**options)
 
 
 def reasons_for(message, sender, contacts, config):
@@ -236,9 +251,9 @@ def main():
     parser.add_argument("--config", type=Path, default=Path("config.json"))
     parser.add_argument("--dry-run", action="store_true", help="Print flags without saving flags or sender profiles")
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
         config = load_config(args.config)
+        configure_logging(config)
     except (OSError, ValueError, TypeError) as error:
         parser.error(str(error))
     try:

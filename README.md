@@ -63,6 +63,18 @@ Run without `--dry-run` to also append flags to `flags.jsonl`:
 python antispam.py
 ```
 
+Application and Telethon log messages go to stderr by default. Set `log_file` in
+`config.json` to append them to a UTF-8 logfile instead, for example:
+
+```json
+{
+  "log_file": "antispam.log"
+}
+```
+
+The path is relative to the working directory, like the other configured paths.
+Set it to `null` to keep logging to stderr.
+
 Each record includes the timestamp, chat/message/sender IDs, username, reasons,
 and full message text. Store this file privately. This version flags locally only:
 it does not delete messages, block users, report spam, or send messages.

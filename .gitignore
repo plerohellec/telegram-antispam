@@ -8,3 +8,5 @@ config.json
 flags.jsonl
 sender_profiles.json
 sender_profiles.json.tmp
+*.log
+
