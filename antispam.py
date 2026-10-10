@@ -13,6 +13,8 @@ from pathlib import Path
 
 from telethon import TelegramClient, events, functions, types
 
+from decisions_api import spam_probability
+
 
 LOG = logging.getLogger("antispam")
 LINK = re.compile(r"(?:https?://|www\.|t\.me/)[^\s]+", re.IGNORECASE)
@@ -183,6 +185,16 @@ async def watch(config, dry_run):
                     LOG.exception("Contact refresh failed; retaining the previous contact list")
                     refreshed_at = time.monotonic()  # Retry after the refresh interval.
             reasons = reasons_for(event.message, sender, contacts, config) if previous is None else []
+            evaluate_spam = previous is None and sender.id not in contacts and not sender.contact
+            probability = None
+            decision_status = "not_requested"
+            if evaluate_spam:
+                try:
+                    probability = await spam_probability(event.raw_text or "")
+                    decision_status = "available"
+                except Exception:
+                    LOG.exception("Spam decision failed for sender %s", sender.id)
+                    decision_status = "failed"
             photo_id = profile["profile_photo_id"]
             photo_status = "no_visible_photo"
             if reasons and photo_id is not None:
@@ -207,7 +219,7 @@ async def watch(config, dry_run):
                     save_profiles(profiles_path, profiles)
                 except OSError:
                     LOG.exception("Could not save sender profiles to %s", profiles_path)
-            if not reasons:
+            if not reasons and not evaluate_spam:
                 return
             record = {
                 "flagged_at": now,
@@ -219,6 +231,8 @@ async def watch(config, dry_run):
                 "sender_profile": dict(profile, photo_lookup_status=photo_status),
                 "reasons": reasons,
                 "text": event.raw_text or "",
+                "spam_probability": probability,
+                "decision_status": decision_status,
             }
             line = json.dumps(record, ensure_ascii=True)
             LOG.info("%s %s", "DRY RUN" if dry_run else "FLAG", line)

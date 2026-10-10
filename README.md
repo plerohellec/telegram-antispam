@@ -17,6 +17,16 @@ Get an API ID and API hash from [my.telegram.org](https://my.telegram.org), unde
 `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in your environment; these override the
 config values. A bot token is not needed.
 
+Add your OpenRouter API key to `.env` beside `antispam.py`:
+
+```dotenv
+OPENROUTER_API_KEY=your-api-key
+```
+
+An existing `OPENROUTER_API_KEY` environment variable takes precedence. `.env` is
+ignored by Git. Install the updated requirements even when using an existing
+virtual environment.
+
 ```bash
 python antispam.py --dry-run
 ```
@@ -49,6 +59,31 @@ message is excluded from flagging even when another rule matches. Whitelist
 matching also ignores case and logs the matched phrase. An empty whitelist
 disables only the phrase-based override. A whitelisted first message still counts
 as the sender's first observed message.
+
+Every first observed message from a non-contact is also submitted to OpenRouter's
+Decisions API using the `spam` question of type `noul` in `decisions_api.py` and the
+`openai/gpt-6-luna-decisions` model. The input is the message text or caption, or an empty string
+for messages without text; attachments and profile data are not sent. This
+includes whitelisted messages, which are still excluded from heuristic rules
+but now produce a record with empty `reasons`. No probability threshold is
+applied, and the existing heuristic rules are otherwise unchanged.
+
+Each record has `spam_probability` (a number from 0 to 1 when available) and
+`decision_status` (`available`, `failed`, or `not_requested`). API failures are
+logged and produce a null probability without stopping local processing.
+Contact messages flagged by other rules have a null probability and
+`not_requested` status. Failed decisions are not retried for previously seen
+senders, including after a restart.
+
+Test the API independently of Telegram:
+
+```bash
+python test_decision.py --text "Hello, have we met before?"
+```
+
+The command prints JSON containing `spam_probability`, or exits with an error.
+It makes a real API request. The watcher also makes real API requests in dry-run
+mode, so message text is sent to OpenRouter and its model provider and API charges can apply.
 
 Flags are heuristics for review; legitimate messages can match them. Contacts are
 loaded at startup and refreshed every five minutes. If a refresh fails, the last
@@ -103,6 +138,8 @@ ID per run. Lookup failures still produce flags and are retried after a restart.
 Set `include_groups` to `true` to also check group messages. Broadcast channel
 posts and anonymous/channel senders are skipped. Messages sent by your account
 are skipped. Existing history and message edits are not scanned.
+When group checking is enabled, the same first-message/non-contact decision
+rule also applies to group senders, using the same private-message instructions.
 
 Edit `suspicious_phrases`, `whitelist_phrases`, `max_links`, or
 `contact_refresh_seconds` to tune the rules. Empty phrase lists disable their
