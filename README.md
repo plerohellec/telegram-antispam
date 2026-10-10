@@ -28,12 +28,27 @@ See [Telethon's sign-in guide](https://docs.telethon.dev/en/stable/basic/signing
 
 ## Flags and dry run
 
-By default, only private messages are checked. A message is flagged if any rule matches:
+By default, only private messages are checked. Spam filters apply only to the first
+message observed from each sender; all subsequent messages are excluded from
+flagging, including across restarts using the saved sender profiles. Senders already
+in the profile file are considered previously seen. Existing Telegram history is
+not checked to determine whether a sender is new.
+
+A first message is flagged if any rule matches:
 
 - The sender is not in your Telegram contacts.
 - Telegram marks the sender as scam or fake.
 - The text or media caption contains a configured suspicious phrase, ignoring case.
 - It has at least `max_links` links, including links hidden behind display text.
+
+If the text or media caption has 16 or more whitespace-separated words, the
+message is excluded from flagging even when another rule matches.
+
+If the text or media caption contains any configured `whitelist_phrases`, the
+message is excluded from flagging even when another rule matches. Whitelist
+matching also ignores case and logs the matched phrase. An empty whitelist
+disables only the phrase-based override. A whitelisted first message still counts
+as the sender's first observed message.
 
 Flags are heuristics for review; legitimate messages can match them. Contacts are
 loaded at startup and refreshed every five minutes. If a refresh fails, the last
@@ -77,6 +92,7 @@ Set `include_groups` to `true` to also check group messages. Broadcast channel
 posts and anonymous/channel senders are skipped. Messages sent by your account
 are skipped. Existing history and message edits are not scanned.
 
-Edit `suspicious_phrases`, `max_links`, or `contact_refresh_seconds` to tune the
-rules. An empty phrase list disables phrase matching. Paths are relative to the
-working directory; use `--config /path/to/config.json` for another config file.
+Edit `suspicious_phrases`, `whitelist_phrases`, `max_links`, or
+`contact_refresh_seconds` to tune the rules. Empty phrase lists disable their
+respective phrase matching. Paths are relative to the working directory; use
+`--config /path/to/config.json` for another config file.

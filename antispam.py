@@ -16,6 +16,7 @@ from telethon import TelegramClient, events, functions, types
 
 LOG = logging.getLogger("antispam")
 LINK = re.compile(r"(?:https?://|www\.|t\.me/)[^\s]+", re.IGNORECASE)
+WHITELIST_MIN_WORDS = 16
 DEFAULTS = {
     "session": "antispam",
     "flags_file": "flags.jsonl",
@@ -24,6 +25,7 @@ DEFAULTS = {
     "contact_refresh_seconds": 300,
     "max_links": 3,
     "suspicious_phrases": ["guaranteed profit", "claim your prize", "seed phrase"],
+    "whitelist_phrases": [],
 }
 
 
@@ -45,9 +47,10 @@ def load_config(path):
     for key in ("max_links", "contact_refresh_seconds"):
         if type(config[key]) is not int or config[key] <= 0:
             raise ValueError(f"{key} must be a positive integer")
-    phrases = config["suspicious_phrases"]
-    if not isinstance(phrases, list) or any(not isinstance(p, str) or not p.strip() for p in phrases):
-        raise ValueError("suspicious_phrases must be a list of nonempty strings")
+    for key in ("suspicious_phrases", "whitelist_phrases"):
+        phrases = config[key]
+        if not isinstance(phrases, list) or any(not isinstance(p, str) or not p.strip() for p in phrases):
+            raise ValueError(f"{key} must be a list of nonempty strings")
     for key in ("session", "flags_file", "profiles_file"):
         if not isinstance(config[key], str) or not config[key].strip():
             raise ValueError(f"{key} must be a nonempty path")
@@ -57,13 +60,21 @@ def load_config(path):
 
 
 def reasons_for(message, sender, contacts, config):
+    text = (message.raw_text or "").casefold()
+    if len((message.raw_text or "").split()) >= WHITELIST_MIN_WORDS:
+        LOG.info("Message excluded by word-count whitelist: %d or more words", WHITELIST_MIN_WORDS)
+        return []
+    for phrase in config["whitelist_phrases"]:
+        if phrase.casefold() in text:
+            LOG.info("Message excluded by whitelist phrase: %s", phrase)
+            return []
+
     reasons = []
     if sender.id not in contacts and not sender.contact:
         reasons.append("sender is not in contacts")
     for label in ("scam", "fake"):
         if getattr(sender, label, False):
             reasons.append(f"Telegram marks sender as {label}")
-    text = (message.raw_text or "").casefold()
     for phrase in config["suspicious_phrases"]:
         if phrase.casefold() in text:
             reasons.append(f"suspicious phrase: {phrase}")
@@ -156,7 +167,7 @@ async def watch(config, dry_run):
                 except Exception:
                     LOG.exception("Contact refresh failed; retaining the previous contact list")
                     refreshed_at = time.monotonic()  # Retry after the refresh interval.
-            reasons = reasons_for(event.message, sender, contacts, config)
+            reasons = reasons_for(event.message, sender, contacts, config) if previous is None else []
             photo_id = profile["profile_photo_id"]
             photo_status = "no_visible_photo"
             if reasons and photo_id is not None:
