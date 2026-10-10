@@ -76,8 +76,21 @@ def configure_logging(config):
     logging.basicConfig(**options)
 
 
-def reasons_for(message, sender, contacts, config):
+async def reasons_for(message, sender, contacts, config):
     text = (message.raw_text or "").casefold()
+    probability = None
+    decision_status = "not_requested"
+    if sender.id not in contacts and not sender.contact:
+        try:
+            probability = await spam_probability(message.raw_text or "")
+            decision_status = "available"
+        except Exception:
+            LOG.exception("Spam decision failed for sender %s", sender.id)
+            decision_status = "failed"
+        LOG.info(
+            "Spam decision: probability=%s status=%s text=%r",
+            probability, decision_status, message.raw_text or "",
+        )
     if len((message.raw_text or "").split()) >= WHITELIST_MIN_WORDS:
         LOG.info("Message excluded by word-count whitelist: %d or more words", WHITELIST_MIN_WORDS)
         return []
@@ -87,6 +100,8 @@ def reasons_for(message, sender, contacts, config):
             return []
 
     reasons = []
+    if probability is not None and probability > 0.30:
+        reasons.append(f"spam probability {probability:.1%} exceeds 30%")
     if sender.id not in contacts and not sender.contact:
         reasons.append("sender is not in contacts")
     for label in ("scam", "fake"):
@@ -184,17 +199,11 @@ async def watch(config, dry_run):
                 except Exception:
                     LOG.exception("Contact refresh failed; retaining the previous contact list")
                     refreshed_at = time.monotonic()  # Retry after the refresh interval.
-            reasons = reasons_for(event.message, sender, contacts, config) if previous is None else []
-            evaluate_spam = previous is None and sender.id not in contacts and not sender.contact
-            probability = None
-            decision_status = "not_requested"
-            if evaluate_spam:
-                try:
-                    probability = await spam_probability(event.raw_text or "")
-                    decision_status = "available"
-                except Exception:
-                    LOG.exception("Spam decision failed for sender %s", sender.id)
-                    decision_status = "failed"
+            reasons = []
+            if previous is None:
+                reasons = await reasons_for(
+                    event.message, sender, contacts, config
+                )
             photo_id = profile["profile_photo_id"]
             photo_status = "no_visible_photo"
             if reasons and photo_id is not None:
@@ -219,7 +228,7 @@ async def watch(config, dry_run):
                     save_profiles(profiles_path, profiles)
                 except OSError:
                     LOG.exception("Could not save sender profiles to %s", profiles_path)
-            if not reasons and not evaluate_spam:
+            if not reasons:
                 return
             record = {
                 "flagged_at": now,
@@ -231,8 +240,6 @@ async def watch(config, dry_run):
                 "sender_profile": dict(profile, photo_lookup_status=photo_status),
                 "reasons": reasons,
                 "text": event.raw_text or "",
-                "spam_probability": probability,
-                "decision_status": decision_status,
             }
             line = json.dumps(record, ensure_ascii=True)
             LOG.info("%s %s", "DRY RUN" if dry_run else "FLAG", line)

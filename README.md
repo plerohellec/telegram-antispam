@@ -47,6 +47,7 @@ not checked to determine whether a sender is new.
 A first message is flagged if any rule matches:
 
 - The sender is not in your Telegram contacts.
+- OpenRouter's spam probability is strictly greater than 30%.
 - Telegram marks the sender as scam or fake.
 - The text or media caption contains a configured suspicious phrase, ignoring case.
 - It has at least `max_links` links, including links hidden behind display text.
@@ -64,16 +65,19 @@ Every first observed message from a non-contact is also submitted to OpenRouter'
 Decisions API using the `spam` question of type `noul` in `decisions_api.py` and the
 `openai/gpt-6-luna-decisions` model. The input is the message text or caption, or an empty string
 for messages without text; attachments and profile data are not sent. This
-includes whitelisted messages, which are still excluded from heuristic rules
-but now produce a record with empty `reasons`. No probability threshold is
-applied, and the existing heuristic rules are otherwise unchanged.
+includes whitelisted messages, which are still excluded from flagging and do not
+produce flag records. A probability strictly greater than 30% adds a reason;
+exactly 30% does not. Every attempted decision logs its probability and message
+text, regardless of the probability or whitelist result. Failed decisions log
+a null probability with failure status. Other flagging rules remain unchanged,
+so even a low-probability message can be flagged by the non-contact rule.
 
-Each record has `spam_probability` (a number from 0 to 1 when available) and
-`decision_status` (`available`, `failed`, or `not_requested`). API failures are
-logged and produce a null probability without stopping local processing.
-Contact messages flagged by other rules have a null probability and
-`not_requested` status. Failed decisions are not retried for previously seen
-senders, including after a restart.
+The API call only contributes a reason when its probability exceeds the
+threshold; flag records do not have separate decision metadata fields. The
+probability appears in qualifying reason text and is always logged with the
+message text. API failures are logged without stopping local processing.
+Failed decisions are not retried for previously seen senders, including after
+a restart.
 
 Test the API independently of Telegram:
 
