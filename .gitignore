@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+config.json
+.env
+*.session
+*.session-*
+flags.jsonl
+sender_profiles.json
+sender_profiles.json.tmp
