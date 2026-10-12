@@ -27,8 +27,8 @@ DEFAULTS = {
     "include_groups": False,
     "contact_refresh_seconds": 300,
     "max_links": 3,
-    "suspicious_phrases": ["guaranteed profit", "claim your prize", "seed phrase"],
-    "whitelist_phrases": [],
+    "suspicious_phrases": ["guaranteed profit", "claim your prize",],
+    "whitelist_phrases": ["vps", "benchmarks", "philippe"],
 }
 
 

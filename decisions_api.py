@@ -11,8 +11,7 @@ SPAM_QUESTION = {
     "type": "noul",
     "instructions": (
         "Is this Telegram private message unsolicited spam, a scam, or a fake attempt to start a conversation? "
-        "Generic greetings from strangers, suspicious invitations, and artificial attempts to establish familiarity "
-        "are spam indicators. Genuine personal or professional inquiries are legitimate."
+        "Generic greetings from strangers, suspicious invitations, and artificial attempts to establish familiarity are spam indicators. Genuine personal or professional inquiries are legitimate."
     ),
 }
 
@@ -28,7 +27,7 @@ async def spam_probability(text):
             "https://openrouter.ai/api/alpha/decisions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
-                "model": "openai/gpt-6-luna-decisions",
+                "model": "typesafe/jev-1.13",
                 "state": text,
                 "questions": {"spam": SPAM_QUESTION},
             },
